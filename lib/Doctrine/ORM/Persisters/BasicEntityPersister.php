@@ -782,10 +782,10 @@ class BasicEntityPersister implements EntityPersister
 
             // unset the old value and set the new sql aliased value here. By definition
             // unset($identifier[$targetKeyColumn] works here with how UnitOfWork::createEntity() calls this method.
-            $identifier[$this->getSQLTableAlias($targetClass->name) . "." . $targetKeyColumn] =
-                $sourceClass->reflFields[$sourceClass->fieldNames[$sourceKeyColumn]]->getValue($sourceEntity);
-
             unset($identifier[$targetKeyColumn]);
+
+            $identifier[$owningAssoc['fieldName']] =
+                $sourceClass->reflFields[$sourceClass->fieldNames[$sourceKeyColumn]]->getValue($sourceEntity);
         }
 
         $targetEntity = $this->load($identifier, null, $assoc);
@@ -1699,6 +1699,7 @@ class BasicEntityPersister implements EntityPersister
     private function getOneToManyStatement(array $assoc, $sourceEntity, $offset = null, $limit = null)
     {
         $criteria = array();
+        $criteriaForExtractingTypes = array();
         $owningAssoc = $this->class->associationMappings[$assoc['mappedBy']];
         $sourceClass = $this->em->getClassMetadata($assoc['sourceEntity']);
 
@@ -1713,17 +1714,18 @@ class BasicEntityPersister implements EntityPersister
                     $value = $this->em->getUnitOfWork()->getEntityIdentifier($value);
                     $value = $value[$this->em->getClassMetadata($sourceClass->associationMappings[$field]['targetEntity'])->identifier[0]];
                 }
-
-                $criteria[$tableAlias . "." . $targetKeyColumn] = $value;
-
-                continue;
+            } else {
+                $field = $owningAssoc['fieldName'];
+                $value = $sourceClass->reflFields[$sourceClass->fieldNames[$sourceKeyColumn]]->getValue($sourceEntity);
             }
 
-            $criteria[$tableAlias . "." . $targetKeyColumn] = $sourceClass->reflFields[$sourceClass->fieldNames[$sourceKeyColumn]]->getValue($sourceEntity);
+            $criteriaForExtractingTypes[$field] = $value;
+            $criteria[$tableAlias . "." . $targetKeyColumn] = $value;
         }
 
+
         $sql = $this->getSelectSQL($criteria, $assoc, null, $limit, $offset);
-        list($params, $types) = $this->expandParameters($criteria);
+        list($params, $types) = $this->expandParameters($criteriaForExtractingTypes);
 
         return $this->conn->executeQuery($sql, $params, $types);
     }
